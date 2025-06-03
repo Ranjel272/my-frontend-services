@@ -18,21 +18,29 @@ function Login() {
 
     try {
       const formData = new URLSearchParams();
-      formData.append("grant_type", "password");  // <-- Added this line
+      formData.append("grant_type", "password");  // <-- Added grant_type
       formData.append("username", credentials.username);
       formData.append("password", credentials.password);
 
-      const response = await fetch("https://my-backend-services.onrender.com/auth/token", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: formData.toString(),
-      });
+      const response = await fetch(
+        "https://my-backend-services.onrender.com/auth/token",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: formData.toString(),
+        }
+      );
 
       const data = await response.json();
 
       if (response.ok) {
+        if (!data.access_token) {
+          alert("No access token received from server.");
+          return;
+        }
+
         alert("Login successful!");
 
         console.log("Access token received:", data.access_token);
@@ -41,16 +49,26 @@ function Login() {
         localStorage.setItem("access_token", data.access_token);
         localStorage.setItem("username", credentials.username);
 
-        // decode token and get role
-        const decodedToken = JSON.parse(atob(data.access_token.split(".")[1]));
-        const userRole = decodedToken.role;
+        try {
+          // Decode JWT token safely
+          const tokenParts = data.access_token.split(".");
+          if (tokenParts.length !== 3) throw new Error("Invalid token format");
 
-        if (userRole === "admin") {
-          navigate("/admin/dashboard");
-        } else if (userRole === "manager") {
-          navigate("/manager-home");
-        } else {
-          alert("Role not recognized.");
+          const decodedToken = JSON.parse(atob(tokenParts[1]));
+          const userRole = decodedToken.role;
+
+          if (userRole === "admin") {
+            navigate("/admin/dashboard");
+          } else if (userRole === "manager") {
+            navigate("/manager-home");
+          } else {
+            alert("Role not recognized.");
+            localStorage.removeItem("access_token");
+            localStorage.removeItem("username");
+          }
+        } catch (jwtError) {
+          console.error("JWT parsing error:", jwtError);
+          alert("Received invalid token from server.");
           localStorage.removeItem("access_token");
           localStorage.removeItem("username");
         }
