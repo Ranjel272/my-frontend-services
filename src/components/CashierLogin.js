@@ -26,7 +26,7 @@ const CashierLogin = () => {
       formData.append("username", username);
       formData.append("password", password);
 
-      const response = await fetch("http://localhost:9000/auth/token", {
+      const response = await fetch("https://my-backend-services.onrender.com/auth/token", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
