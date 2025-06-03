@@ -18,6 +18,7 @@ function Login() {
 
     try {
       const formData = new URLSearchParams();
+      formData.append("grant_type", "password");  // <-- Added this line
       formData.append("username", credentials.username);
       formData.append("password", credentials.password);
 
@@ -35,7 +36,7 @@ function Login() {
         alert("Login successful!");
 
         console.log("Access token received:", data.access_token);
-        console.log("Username:", credentials.username); 
+        console.log("Username:", credentials.username);
 
         localStorage.setItem("access_token", data.access_token);
         localStorage.setItem("username", credentials.username);
@@ -50,7 +51,6 @@ function Login() {
           navigate("/manager-home");
         } else {
           alert("Role not recognized.");
-          //clearing localStorage here if role is not recognized
           localStorage.removeItem("access_token");
           localStorage.removeItem("username");
         }
