@@ -1,12 +1,20 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from 'react-router-dom';
-import "../admin/employeeRecords.css";
-import Sidebar from "../sidebar";
+import "../admin/employeeRecords.css"; // Ensure this path is correct
+import Sidebar from "../sidebar"; // Ensure this path is correct
 import { FaChevronDown, FaBell, FaEdit, FaArchive, FaPlus, FaFolderOpen } from "react-icons/fa";
 import DataTable from "react-data-table-component";
 
-const API_BASE_URL = "https://my-backend-services.onrender.com/employee-accounts/create";
-const IMAGE_BASE_URL = "http://127.0.0.1:9000/uploads";
+// --- CORRECTED API AND IMAGE BASE URLS ---
+const API_BASE_URL_ROOT = "https://my-backend-services.onrender.com"; // Root backend URL
+const EMPLOYEE_ACCOUNTS_PATH = "/employee-accounts";
+
+const API_BASE_URL = `${API_BASE_URL_ROOT}${EMPLOYEE_ACCOUNTS_PATH}`; // Should be: "https://my-backend-services.onrender.com/employee-accounts"
+
+const IMAGE_BASE_URL = process.env.NODE_ENV === 'production'
+    ? `${API_BASE_URL_ROOT}/uploads` // For production: "https://my-backend-services.onrender.com/uploads"
+    : "http://localhost:9000/uploads"; // For local development (adjust port if needed, e.g., 8000 if your FastAPI runs there)
+
 export const DEFAULT_PROFILE_IMAGE = "https://media-hosting.imagekit.io/1123dd6cf5c544aa/screenshot_1746457481487.png?Expires=1841065483&Key-Pair-Id=K2ZIVPTIP2VGHC&Signature=kiHcXbHpirt9QHbMA4by~Kd4b2BrczywyVUfZZpks5ga3tnO8KlP8s5tdDpZQqinqOG30tGn0tgSCwVausjJ1OJ9~e6qPVjLXbglD-65hmsehYCZgEzeyGPPE-rOlyGJCgJC~GCZOu0jDKKcu2fefrClaqBBT3jaXoK4qhDPfjIFa2GCMfetybNs0RF8BtyKLgFGeEkvibaXhYxmzO8tksUKaLAMLbsPWvHBNuzV6Ar3mj~lllq7r7nrynNfdvbtuED7OGczSqZ8H-iopheAUhaWZftAh9tX2vYZCZZ8UztSEO3XUgLxMMtv9NnTei1omK00iJv1fgBjwR2lSqRk7w__";
 
 const getAuthToken = () => {
@@ -40,7 +48,7 @@ function EmployeeRecords() {
         email: empFromBackend.emailAddress || "N/A",
         role: empFromBackend.userRole,
         phone: empFromBackend.phoneNumber || "N/A",
-        status: "Active", // Assuming default status, backend might send this
+        status: empFromBackend.status || "Active", // Ensure backend sends status or use a default
         hireDate: empFromBackend.hireDate ? empFromBackend.hireDate.split("T")[0] : "",
         image: empFromBackend.uploadImage ? `${IMAGE_BASE_URL}/${empFromBackend.uploadImage}` : DEFAULT_PROFILE_IMAGE,
     });
@@ -53,6 +61,7 @@ function EmployeeRecords() {
             return;
         }
         try {
+            // Uses corrected API_BASE_URL. Path is relative to it.
             const response = await fetch(`${API_BASE_URL}/list-employee-accounts`, {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
@@ -63,7 +72,7 @@ function EmployeeRecords() {
                 return;
             }
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ detail: "Unknown error" }));
+                const errorData = await response.json().catch(() => ({ detail: "Unknown error when fetching employees" }));
                 throw new Error(errorData.detail || "Failed to fetch employees");
             }
             const data = await response.json();
@@ -147,16 +156,17 @@ function EmployeeRecords() {
             }
             passwordToSend = formData.password;
         } else {
-            if (!editingEmployee) {
+            if (!editingEmployee) { // Creating new employee
                 if (formData.role === 'cashier') {
                     alert("Passcode is required for new Cashier."); return;
                 } else if (formData.role === 'admin' || formData.role === 'manager') {
                     alert("Password is required for new Admin/Manager."); return;
                 }
-            } else {
+            } else { // Editing existing employee
                 const originalRole = editingEmployee.role;
                 const newRole = formData.role;
 
+                // Password becomes required if role changes to/from cashier and requires different auth type
                 if (newRole === 'cashier' && originalRole !== 'cashier') {
                     alert("A 6-digit passcode is required when changing role to Cashier."); return;
                 }
@@ -177,7 +187,7 @@ function EmployeeRecords() {
                 return;
             }
         } else if (formData.role === 'cashier') {
-            usernameToSend = 'cashier';
+            usernameToSend = 'cashier'; // Backend needs to handle this if multiple cashiers
         }
 
 
@@ -196,8 +206,8 @@ function EmployeeRecords() {
 
         if (formData.phone && formData.phone.trim() !== "" && formData.phone !== "N/A") {
             apiFormData.append('phoneNumber', formData.phone);
-        } else if (formData.phone.trim() === "" && editingEmployee && editingEmployee.phone !== "N/A") { // Send empty string to clear if it was previously set
-             apiFormData.append('phoneNumber', "");
+        } else if (formData.phone.trim() === "" && editingEmployee && editingEmployee.phone !== "N/A" && editingEmployee.phone !== "") {
+             apiFormData.append('phoneNumber', ""); // Send empty string to clear if it was previously set and not already empty
         }
 
 
@@ -212,16 +222,21 @@ function EmployeeRecords() {
         try {
             let response;
             const headers = { 'Authorization': `Bearer ${token}` };
+            let url;
 
             if (editingEmployee) {
                 if (!editingEmployee.id) {
                     alert("Error: Employee ID is missing for update."); return;
                 }
-                response = await fetch(`${API_BASE_URL}/update/${editingEmployee.id}`, {
+                // Uses corrected API_BASE_URL. Path is relative to it.
+                url = `${API_BASE_URL}/update/${editingEmployee.id}`;
+                response = await fetch(url, {
                     method: "PUT", body: apiFormData, headers: headers,
                 });
             } else {
-                response = await fetch(`${API_BASE_URL}/create`, {
+                // Uses corrected API_BASE_URL. Path is relative to it.
+                url = `${API_BASE_URL}/create`;
+                response = await fetch(url, {
                     method: "POST", body: apiFormData, headers: headers,
                 });
             }
@@ -233,7 +248,8 @@ function EmployeeRecords() {
                 return;
             }
 
-            const responseData = await response.json();
+            const responseData = await response.json().catch(() => ({ detail: "Failed to parse server response." }));
+
 
             if (!response.ok) {
                 const errorMessage = responseData.detail || `Failed to ${editingEmployee ? 'update' : 'add'} employee. Status: ${response.status}`;
@@ -241,7 +257,7 @@ function EmployeeRecords() {
             }
 
             alert(`Employee ${editingEmployee ? 'updated' : 'added'} successfully!`);
-            fetchEmployees();
+            fetchEmployees(); // Refresh the list
             handleModalClose();
 
         } catch (error) {
@@ -265,7 +281,7 @@ function EmployeeRecords() {
             role: emp.role,
             hireDate: emp.hireDate,
             status: emp.status,
-            image: emp.image,
+            image: emp.image, // This should be the URL from mapBackendToFrontend
             imageFile: null,
             password: "", // Always start with a blank password field for edits
         });
@@ -283,6 +299,7 @@ function EmployeeRecords() {
         const confirmDelete = window.confirm("Are you sure you want to soft delete this employee?");
         if (confirmDelete) {
             try {
+                // Uses corrected API_BASE_URL. Path is relative to it.
                 const response = await fetch(`${API_BASE_URL}/delete/${empId}`, {
                     method: "DELETE",
                     headers: { 'Authorization': `Bearer ${token}` },
@@ -293,13 +310,20 @@ function EmployeeRecords() {
                     navigate('/login');
                     return;
                 }
+                // For DELETE, 204 No Content is a common successful response
+                if (response.status === 204) {
+                    alert("Employee deleted successfully!");
+                    fetchEmployees(); // Refresh the list
+                    return;
+                }
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ detail: "Unknown error" }));
+                    const errorData = await response.json().catch(() => ({ detail: "Unknown error when deleting employee" }));
                     throw new Error(errorData.detail || "Failed to delete employee");
                 }
-                // No need to parse JSON for a successful DELETE if backend sends 204 or empty success
-                alert("Employee deleted successfully!");
-                fetchEmployees();
+                // If backend sends a JSON body for successful delete (e.g. 200 OK)
+                // const result = await response.json();
+                alert("Employee deleted successfully!"); // Or use message from result if available
+                fetchEmployees(); // Refresh the list
             } catch (error) {
                 console.error("Error deleting employee:", error);
                 alert(`Error deleting employee: ${error.message}`);
@@ -311,7 +335,7 @@ function EmployeeRecords() {
         const nameMatch = emp.name?.toLowerCase().includes(searchTerm.toLowerCase());
         const emailMatch = emp.email?.toLowerCase().includes(searchTerm.toLowerCase());
         const roleMatch = roleFilter ? emp.role === roleFilter : true;
-        const statusMatch = statusFilter ? emp.status === statusFilter : true;
+        const statusMatch = statusFilter ? emp.status === statusFilter : true; // Ensure emp.status is populated
         return (nameMatch || emailMatch) && roleMatch && statusMatch;
     });
 
@@ -367,8 +391,8 @@ function EmployeeRecords() {
 
                 if (previousRole === 'cashier' && (newRole === 'admin' || newRole === 'manager')) {
                     newFormData.username = ''; 
-                } else if ((previousRole === 'admin' || previousRole === 'manager') && newRole === 'cashier') {
-                    newFormData.username = 'cashier'; 
+                } else if ((previousRole === 'admin' || previousRole === 'manager' || previousRole === '') && newRole === 'cashier') {
+                    newFormData.username = 'cashier'; // Set username to 'cashier' when role becomes cashier
                 }
             }
             
@@ -386,17 +410,17 @@ function EmployeeRecords() {
 
     const handleLogout = () => {
         localStorage.removeItem('access_token');
-        navigate('/');
+        navigate('/'); // Navigate to home or login page
     };
 
-     const [roles] = useState([
-        { id: 1, name: "Admin", description: "Full system access with all permissions", users: employees.filter(e => e.role === 'admin').length },
-        { id: 2, name: "Manager", description: "Store management with limited admin access", users: employees.filter(e => e.role === 'manager').length },
-        { id: 3, name: "Cashier", description: "Point of sale and basic inventory functions", users: employees.filter(e => e.role === 'cashier').length },
+     const [rolesData] = useState([ // Renamed to rolesData to avoid conflict if 'roles' prop exists
+        { id: 1, name: "Admin", description: "Full system access with all permissions" },
+        { id: 2, name: "Manager", description: "Store management with limited admin access" },
+        { id: 3, name: "Cashier", description: "Point of sale and basic inventory functions" },
     ]);
 
-     useEffect(() => {
-     }, [employees]);
+    // useEffect to update rolesData with user counts when employees change (optional, if needed for display)
+    // This is handled directly in columnRoles selector now.
 
 
     const columnRoles = [
@@ -409,19 +433,20 @@ function EmployeeRecords() {
     let passwordHintText = "";
 
     if (showModal) { 
-        if (!editingEmployee) { 
+        if (!editingEmployee) { // Adding new employee
             passwordIsRequiredForDisplay = true;
-        } else { 
+        } else { // Editing existing employee
             const originalRole = editingEmployee.role; 
             const currentFormRole = formData.role;    
 
+            // Password becomes required if role changes and implies a different auth mechanism
             if (currentFormRole === 'cashier' && originalRole !== 'cashier') {
                 passwordIsRequiredForDisplay = true; 
             } else if ((currentFormRole === 'admin' || currentFormRole === 'manager') && originalRole === 'cashier') {
                 passwordIsRequiredForDisplay = true; 
             }
             
-            if (!passwordIsRequiredForDisplay) { 
+            if (!passwordIsRequiredForDisplay) { // If not required due to role change, it's optional for update
                 passwordHintText = "(leave blank to keep current)";
             }
         }
@@ -437,7 +462,7 @@ function EmployeeRecords() {
                         <div className="header-date">{currentDate}</div>
                         <div className="header-profile">
                         <div className="profile-left">
-                            <div className="profile-pic" style={{ backgroundImage: `url(${DEFAULT_PROFILE_IMAGE})` }}></div>
+                            <div className="profile-pic" style={{ backgroundImage: `url(${loggedInUserDisplay.image || DEFAULT_PROFILE_IMAGE})` }}></div>
                             <div className="profile-info">
                             <div className="profile-role">Hi! I'm {loggedInUserDisplay.role}</div>
                             <div className="profile-name">{loggedInUserDisplay.name}</div>
@@ -453,6 +478,7 @@ function EmployeeRecords() {
                             <div className="profile-dropdown">
                             <ul>
                                 <li onClick={handleLogout}>Logout</li>
+                                {/* Add other dropdown items if needed */}
                             </ul>
                             </div>
                         )}
@@ -503,7 +529,6 @@ function EmployeeRecords() {
 
                     {showModal && (
                         <div className="modal-overlay">
-                            {/* Changed modal-border to modal-container and removed inner modal-container div */}
                             <div className="modal-container"> 
                                 <div className="modal-header">
                                     <h2>{editingEmployee ? "Edit Employee" : "Add Employee"}</h2>
@@ -520,13 +545,13 @@ function EmployeeRecords() {
                                                 style={{ display: "none" }}
                                             />
                                             <img
-                                                src={formData.image || DEFAULT_PROFILE_IMAGE}
+                                                src={formData.image || DEFAULT_PROFILE_IMAGE} // formData.image holds temp blob URL or existing image URL
                                                 alt="Profile Preview"
                                                 className="profile-image"
                                                 onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_PROFILE_IMAGE; }}
                                             />
-                                            {!formData.imageFile && !editingEmployee?.image && (!formData.image || formData.image === DEFAULT_PROFILE_IMAGE) && <div className="upload-placeholder">Upload Image</div>}
-                                            {(editingEmployee?.image || formData.imageFile) && <div className="upload-placeholder">Change Image</div>}
+                                            {!formData.imageFile && !formData.image.startsWith('blob:') && (!editingEmployee?.image || editingEmployee?.image === DEFAULT_PROFILE_IMAGE) && <div className="upload-placeholder">Upload Image</div>}
+                                            {(formData.imageFile || formData.image.startsWith('blob:') || (editingEmployee?.image && editingEmployee?.image !== DEFAULT_PROFILE_IMAGE)) && <div className="upload-placeholder">Change Image</div>}
                                         </div>
                                     </div>
                                     <form className="form-grid" onSubmit={(e) => { e.preventDefault(); handleSaveEmployee(); }}>
@@ -540,7 +565,6 @@ function EmployeeRecords() {
                                             required
                                         />
 
-                                        {/* Row for Email and Phone */}
                                         <div className="row">
                                             <div>
                                                 <label>Email Address<span className="required">*</span></label>
@@ -565,7 +589,6 @@ function EmployeeRecords() {
                                             </div>
                                         </div>
 
-                                        {/* Row for Role and Hire Date */}
                                         <div className="row">
                                             <div>
                                                 <label>Role<span className="required">*</span></label>
@@ -596,7 +619,7 @@ function EmployeeRecords() {
                                                     placeholder="Username"
                                                     value={formData.username}
                                                     onChange={handleFormChange}
-                                                    // required will be checked in handleSaveEmployee
+                                                    // required attribute handled by conditional logic in handleSaveEmployee
                                                 />
                                             </>
                                         )}
@@ -618,7 +641,6 @@ function EmployeeRecords() {
                                             inputMode={formData.role === 'cashier' ? "numeric" : undefined}
                                         />
                                         
-                                        {/* Removed old standalone Hire Date row as it's combined above */}
                                         <button type="submit" className="save-btn">Save Employee</button>
                                     </form>
                                 </div>
@@ -628,7 +650,6 @@ function EmployeeRecords() {
 
                     {viewingEmployee && (
                         <div className="modal-overlay">
-                             {/* Changed modal-border to modal-container and removed inner modal-container div */}
                             <div className="modal-container">
                                 <div className="modal-header">
                                     <h2>Employee Details</h2>
@@ -636,7 +657,6 @@ function EmployeeRecords() {
                                 </div>
                                 <div className="modal-body">
                                     <div className="profile-upload-wrapper">
-                                        {/* Changed className to profile-view for the image wrapper */}
                                         <div className="profile-view"> 
                                             <img
                                                 src={viewingEmployee.image || DEFAULT_PROFILE_IMAGE}
@@ -648,28 +668,27 @@ function EmployeeRecords() {
                                     </div>
                                     <div className="form-grid view-mode">
                                         <div className="row">
-                                            <div><label>Employee ID</label><input type="text" value={viewingEmployee.id} disabled /></div>
-                                            <div><label>Full Name</label><input type="text" value={viewingEmployee.name} disabled /></div>
+                                            <div><label>Employee ID</label><input type="text" value={viewingEmployee.id || 'N/A'} disabled /></div>
+                                            <div><label>Full Name</label><input type="text" value={viewingEmployee.name || 'N/A'} disabled /></div>
                                         </div>
-                                        {/* Row for Email and Phone */}
                                         <div className="row">
                                             <div>
-                                                <label>Email Address</label><input type="email" value={viewingEmployee.email} disabled />
+                                                <label>Email Address</label><input type="email" value={viewingEmployee.email || 'N/A'} disabled />
                                             </div>
                                             <div>
-                                                <label>Phone Number</label><input type="tel" value={viewingEmployee.phone} disabled />
+                                                <label>Phone Number</label><input type="tel" value={viewingEmployee.phone || 'N/A'} disabled />
                                             </div>
                                         </div>
                                         
                                         {(viewingEmployee.role === 'admin' || viewingEmployee.role === 'manager' || viewingEmployee.username === 'cashier') && (
-                                            <div><label>Username</label><input type="text" value={viewingEmployee.username} disabled /></div>
+                                            <div><label>Username</label><input type="text" value={viewingEmployee.username || 'N/A'} disabled /></div>
                                         )}
                                         
                                         <div className="row">
-                                            <div><label>Role</label><input type="text" value={viewingEmployee.role} disabled /></div>
-                                            <div><label>Hire Date</label><input type="date" value={viewingEmployee.hireDate} disabled /></div>
+                                            <div><label>Role</label><input type="text" value={viewingEmployee.role || 'N/A'} disabled /></div>
+                                            <div><label>Hire Date</label><input type="date" value={viewingEmployee.hireDate || ''} disabled /></div>
                                         </div>
-                                        <div><label>Status</label><input type="text" value={viewingEmployee.status} disabled /></div>
+                                        <div><label>Status</label><input type="text" value={viewingEmployee.status || 'N/A'} disabled /></div>
                                     </div>
                                 </div>
                             </div>
@@ -697,7 +716,7 @@ function EmployeeRecords() {
                         <div className="roleManagement-content">
                             <DataTable
                                 columns={columnRoles}
-                                data={roles.map(role => ({
+                                data={rolesData.map(role => ({ // Use rolesData here
                                     ...role,
                                     users: employees.filter(emp => emp.role === role.name.toLowerCase()).length
                                 }))} 
